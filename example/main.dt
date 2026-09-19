@@ -1,0 +1,4 @@
+function main() {
+    Console.log("Hello, World")
+    return
+}
