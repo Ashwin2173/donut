@@ -12,25 +12,25 @@ class Compiler:
     def handle_constant(self, constant) -> int:
         if constant.value in self.constant_table: 
             return self.constant_table[constant.value].index
-        constant.index = len(self.constant_table)
+        constant.index = len(self.constant_table) + 1
         self.constant_table[constant.value] = constant
         return constant.index
     
     def handle_function_access_flag(self, name) -> int:
         result = 0
         if name.startswith("__"):   # private
-            result &= 0x0002
+            result |= 0x0002
         elif name.startswith("_"):  # protected
-            result &= 0x0004
+            result |= 0x0004
         else:                       # public
-            result &= 0x0001
-        result &= 0x0008            # static
+            result |= 0x0001
+        result |= 0x0008            # static
         return result
     
     def compile_function_body(self) -> bytearray:
         if next(self.tokens).type != TokenType.K_RETURN:
             raise DonutError("no other op code is accept for now; give just return")
-        return struct.pack(">LH", 1, 177)
+        return struct.pack(">B", 0xB1)
     
     def compile_function(self) -> bytearray:
         bc = bytearray()
@@ -41,16 +41,19 @@ class Compiler:
         bc += struct.pack(">H", self.handle_constant(Constant_Utf8("([Ljava/lang/String;)V")))
         expect(next(self.tokens), TokenType.CLOSE_PARAM)
         expect(next(self.tokens), TokenType.OPEN_BRACE)
+        bc += struct.pack(">H", 1)  # attr count
         bc += struct.pack(">H", self.handle_constant(Constant_Utf8("Code")))
         code_length = len(bc)
-        bc += struct.pack(">H", 0)  # code attr length
+        bc += struct.pack(">L", 0)  # code attr length
         bc += struct.pack(">H", 1) # max stack
-        bc += struct.pack(">H", 0) # max local
-        bc += self.compile_function_body()
+        bc += struct.pack(">H", 1) # max local
+        body = self.compile_function_body()
+        bc += struct.pack(">L", len(body))
+        bc += body
         bc += struct.pack(">H", 0) # exception table
         bc += struct.pack(">H", 0) # attribute table
         length = len(bc)
-        bc[code_length] = length - (code_length + 2)
+        bc[code_length:code_length+4] = struct.pack(">L", length - (code_length+4))
         expect(next(self.tokens), TokenType.CLOSE_BRACE)
         return bc
 
@@ -73,16 +76,16 @@ class Compiler:
         
     def pack_compiled(self, func_count, func_bc) -> bytearray:
         bc = bytearray()
-        this_class_name = self.handle_constant(Constant_Utf8("Main.dt"))
+        this_class_name = self.handle_constant(Constant_Utf8("Main"))
         this_class_index = self.handle_constant(Constant_Class(this_class_name))
         super_class_name = self.handle_constant(Constant_Utf8("java/lang/Object"))
         super_class_index = self.handle_constant(Constant_Class(super_class_name))
         source_file = self.handle_constant(Constant_Utf8("SourceFile"))
         source_file_index = self.handle_constant(Constant_Utf8("Main.dt"))
-        const_in_order = list(range(len(self.constant_table)))
+        const_in_order = [None] * len(self.constant_table)
         for const in self.constant_table.values():
-            const_in_order[const.index] = const
-        bc += struct.pack(">H", len(const_in_order))
+            const_in_order[const.index - 1] = const
+        bc += struct.pack(">H", len(const_in_order) + 1)
         for const in const_in_order:
             bc += bytes(const)
         bc += struct.pack(">H", 1)  # public access-flag
