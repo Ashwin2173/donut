@@ -1,4 +1,5 @@
 import struct
+from utils.tokenizer import Word
 from utils.models import *
 from utils.exceptions import DonutError
 from utils.tokenizer import TokenType, tokenize
@@ -28,9 +29,37 @@ class Compiler:
         return result
     
     def compile_function_body(self) -> bytearray:
-        if next(self.tokens).type != TokenType.K_RETURN:
-            raise DonutError("no other op code is accept for now; give just return")
-        return struct.pack(">B", 0xB1)
+        bc = bytearray()
+        while True:
+            token = next(self.tokens)
+            if token.type == TokenType.CLOSE_BRACE: break
+            if token.type == TokenType.K_RETURN:
+                bc += struct.pack(">B", 0xB1)
+            elif token.type == TokenType.K_PRINT:
+                string: Word = next(self.tokens)
+                if string.type == TokenType.STRING:
+                    method_index = self.handle_constant(
+                        Constant_Methodref(
+                            self.handle_constant(
+                                Constant_Class(self.handle_constant(Constant_Utf8("Console")))
+                            ),
+                            self.handle_constant(
+                                Constant_NameAndType(
+                                self.handle_constant(Constant_Utf8("log")),
+                                self.handle_constant(Constant_Utf8("(Ljava/lang/String;)V"))
+                            ))
+                        )
+                    )
+                    constant_index = self.handle_constant(Constant_String(
+                        self.handle_constant(Constant_Utf8(string.raw[1:-1]))
+                    ))
+                    bc += struct.pack(">BB", 0x12, constant_index)  # load string const
+                    bc += struct.pack(">BH", 0xb8, method_index)    # invoke static method
+                else:
+                    raise DonutError(None, "print only supports string as args")
+            else:
+                raise DonutError(None, "no other statement is accepted expect for return and print")
+        return bc
     
     def compile_function(self) -> bytearray:
         bc = bytearray()
@@ -54,7 +83,6 @@ class Compiler:
         bc += struct.pack(">H", 0) # attribute table
         length = len(bc)
         bc[code_length:code_length+4] = struct.pack(">L", length - (code_length+4))
-        expect(next(self.tokens), TokenType.CLOSE_BRACE)
         return bc
 
     def compile(self) -> bytearray:

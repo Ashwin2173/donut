@@ -6,6 +6,7 @@ TOKEN_GRAMMAR = r"""
 (?P<COMMENT>//[^\n]*)                                     # single-line comment
 | (?P<K_FUNCTION>\bfunction\b)                            # function keyword
 | (?P<K_RETURN>\breturn\b)                                # return keyword
+| (?P<K_PRINT>\bprint\b)                                  # print keyword
 | (?P<K_VAR>\bvar\b)                                      # variable declaration
 | (?P<OPEN_BRACE>\{)                                      # open brace operator
 | (?P<CLOSE_BRACE>\})                                     # close brace operator
@@ -25,6 +26,7 @@ class TokenType(Enum):
     COMMENT = "COMMENT"
     K_FUNCTION = "K_FUNCTION"
     K_RETURN = "K_RETURN"
+    K_PRINT = "K_PRINT"
     K_VAR = "K_VAR"
     OPEN_BRACE = "OPEN_BRACE"
     CLOSE_BRACE = "CLOSE_BRACE"
